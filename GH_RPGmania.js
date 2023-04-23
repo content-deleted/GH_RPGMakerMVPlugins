@@ -42,7 +42,8 @@
  *   /img/rpgmania/stageside.png -  Stage sides texture
  *   /img/rpgmania/char.png      -  (Optional) Picture of character to do a silly dance :)
  * 
- * 
+ *  IMPORTANT: Additionally, make sure to install the pixi-projection library by copying it into your js/libs folder 
+ *  and updating your index.html file. See the example project for an example.
  * ============================================================================= 
  * Start minigame examples:
  * 
