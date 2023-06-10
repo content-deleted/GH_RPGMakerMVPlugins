@@ -1,5 +1,5 @@
 /*:
- * @plugindesc (v1.0) Minigame based on stepmania
+ * @plugindesc (v1.0.1) Minigame based on stepmania
  * @author contentdeleted
  *
  * @param Enable Note Sound
