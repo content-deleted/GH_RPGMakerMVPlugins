@@ -103,6 +103,19 @@ GH_RPGmania.CHARTSFOLDER = 'charts/';
 
 GH_RPGmania.getChartNames = function (chartCallback) {
     if(!this.fs) this.fs = require('fs');
+    // requires checking the root dir
+    this.fs.readdir("www/" + GH_RPGmania.CHARTSFOLDER, (err, files) => {
+        if(err) {
+            return;
+        }
+
+        // build?
+        GH_RPGmania.CHARTSFOLDER = 'www/charts/';
+
+        chartCallback(files);
+    });
+
+    // still check this for not build I guess
     this.fs.readdir(GH_RPGmania.CHARTSFOLDER, (err, files) => {
         if(err) {
             console.log(err);
@@ -196,7 +209,6 @@ GH_RPGmania.parseNotes = function(rawContent) {
     // We can check this by the length of this subarray
     // Also clean out comments since some newer charts contain them
     obj.data = measures.map(s => s.trim().split(/\r?\n/).filter(x => !x.startsWith("//")));
-    console.log(obj);
     return obj;
 }
 
@@ -210,7 +222,6 @@ Game_Interpreter.prototype.pluginCommand = function(command, args) {
 	if (command === "rpgmania")  {
         switch (args[0]){
             case "playsong": {
-                console.log(args[1]);
                 $gameSystem._rpgmania_data = {
                     songList: false,
                     songName: args[1],
@@ -706,7 +717,6 @@ Scene_RPGmania.prototype.update_phase = function() {
 };
 
 Scene_RPGmania.prototype.update_start_phase = function() {
-    console.log(this._phase_state);
     switch (this._phase_state) {
 		case 0:
             // Wait on list menuing
@@ -779,10 +789,8 @@ Scene_RPGmania.prototype.bltComboDigits = function(target, x, y, value) {
     let string = Math.abs(value).toString();
     let w = this.comboDigitWidth();
     let h = this.comboDigitHeight();
-    console.log("value: "+ value);
     for (var i = 0; i < string.length; i++) {
         let n = Number(string[i]);
-        console.log(n)
         target.blt(this._rank_img, n*w, 0, w - 3, h, x + i * w, y);
     }
 };
@@ -1342,12 +1350,15 @@ Window_SongList.prototype.updateData = function() {
 }
 
 Window_SongList.prototype.refresh = function() {
-    //this.createContents();
     this.contents.clear();
     this.drawAllItems();
+    if(this._data && this._data.length > 1 && this.index() == -1) {
+        this.select(0);
+    }
 };
 
 Window_SongList.prototype.onSongSelect = function() {
+    if(!this._data || !this._data[this._index]) return;
     let chart = this._data[this._index];
     let difficulties = Object.keys(chart.NOTES);
 
@@ -1475,169 +1486,3 @@ PIXI.projection.Sprite3d.prototype.setFrame = function(x, y, width, height) {
     this.texture.frame.height = h;
     this.texture._updateUvs();
 };
-
-// Insane waste of time 
-//       |
-//       |
-//       V
-
-var pixi_projection;
-(function (pixi_projection) {
-    var MultiTextureSpriteRenderer = pixi_projection.webgl.MultiTextureSpriteRenderer;
-    var SkyboxRenderer = (function (_super) {
-        __extends(SkyboxRenderer, _super);
-        function SkyboxRenderer() {
-            var _this = _super !== null && _super.apply(this, arguments) || this;
-
-            _this.MAX_TEXTURES_LOCAL = 1;
-            _this.MAX_TEXTURES = 1;
-            _this.shaderVert = `
-precision highp float;
-attribute vec3 aVertexPosition;
-attribute vec2 aTextureCoord;
-attribute vec4 aColor;
-attribute float aTextureId;
-
-uniform mat3 projectionMatrix;
-
-varying vec2 vTextureCoord;
-varying vec4 vColor;
-varying float vTextureId;
-varying vec3 vPosition;
-
-void main(void){
-    gl_Position.xyw = aVertexPosition;
-    gl_Position.z = 1.0;
-
-    vTextureCoord = aTextureCoord;
-    vTextureId = aTextureId;
-    vColor = aColor;
-    vPosition = aVertexPosition;
-}`;
-            _this.shaderFrag = `
-varying vec2 vTextureCoord;
-varying vec4 vColor;
-varying float vTextureId;
-varying vec3 vPosition;
-uniform mat3 projectionMatrix;
-uniform samplerCube skybox;
-
-void main(void){
-    vec3 t = projectionMatrix * vPosition;
-    gl_FragColor = vec4(1,1,1,1) + textureCube(skybox, t);
-}`;
-// uniform mat3 projectionMatrix;
-// void main(void){
-//     vec4 color;
-//     vec2 textureCoord = vTextureCoord;
-//     float textureId = floor(vTextureId+0.5);
-//     %forloop%
-//     gl_FragColor = color * vColor;
-// };
-
-//vec4 t = u_viewDirectionProjectionInverse * v_position;
-//gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
-
-            return _this;
-        }
-
-        SkyboxRenderer.prototype.createVao = function (vertexBuffer) {
-            // Original code
-            var attrs = this.shader.attributes;
-            this.vertSize = 6;
-            this.vertByteSize = this.vertSize * 4;
-            var gl = this.renderer.gl;
-
-            var vao = this.renderer.createVao()
-                .addIndex(this.indexBuffer)
-                .addAttribute(vertexBuffer, attrs.aVertexPosition, gl.FLOAT, false, this.vertByteSize, 0)
-                .addAttribute(vertexBuffer, attrs.aTextureCoord, gl.UNSIGNED_SHORT, true, this.vertByteSize, 3 * 4)
-                .addAttribute(vertexBuffer, attrs.aColor, gl.UNSIGNED_BYTE, true, this.vertByteSize, 4 * 4);
-            if (attrs.aTextureId) {
-                vao.addAttribute(vertexBuffer, attrs.aTextureId, gl.FLOAT, false, this.vertByteSize, 5 * 4);
-            }
-
-            return vao;
-        };
-        SkyboxRenderer.prototype.fillVertices = function (float32View, uint32View, index, sprite, argb, textureId) {
-            if(sprite._texture.baseTexture.hasLoaded) {
-                var gl = this.renderer.gl;
-                const texture = gl.createTexture();
-                gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
-                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                for(let i = 0; i < 6; i++) {
-                    gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sprite._texture.baseTexture.source);
-                }
-            }
-
-            // Original code
-            // var vertexData = sprite.vertexData;
-            // console.log("vertexdata:", vertexData);
-            let vertexData = [
-                -1, -1, 
-                1, -1, 
-                -1,  1, 
-                -1,  1,
-                1, -1,
-                1,  1,
-            ];
-            var uvs = sprite._texture._uvs.uvsUint32;
-            if (vertexData.length === 8) {
-                if (this.renderer.roundPixels) {
-                    var resolution = this.renderer.resolution;
-                    float32View[index] = ((vertexData[0] * resolution) | 0) / resolution;
-                    float32View[index + 1] = ((vertexData[1] * resolution) | 0) / resolution;
-                    float32View[index + 2] = 1.0;
-                    float32View[index + 6] = ((vertexData[2] * resolution) | 0) / resolution;
-                    float32View[index + 7] = ((vertexData[3] * resolution) | 0) / resolution;
-                    float32View[index + 8] = 1.0;
-                    float32View[index + 12] = ((vertexData[4] * resolution) | 0) / resolution;
-                    float32View[index + 13] = ((vertexData[5] * resolution) | 0) / resolution;
-                    float32View[index + 14] = 1.0;
-                    float32View[index + 18] = ((vertexData[6] * resolution) | 0) / resolution;
-                    float32View[index + 19] = ((vertexData[7] * resolution) | 0) / resolution;
-                    float32View[index + 20] = 1.0;
-                }
-                else {
-                    float32View[index] = vertexData[0];
-                    float32View[index + 1] = vertexData[1];
-                    float32View[index + 2] = 1.0;
-                    float32View[index + 6] = vertexData[2];
-                    float32View[index + 7] = vertexData[3];
-                    float32View[index + 8] = 1.0;
-                    float32View[index + 12] = vertexData[4];
-                    float32View[index + 13] = vertexData[5];
-                    float32View[index + 14] = 1.0;
-                    float32View[index + 18] = vertexData[6];
-                    float32View[index + 19] = vertexData[7];
-                    float32View[index + 20] = 1.0;
-                }
-            }
-            else {
-                float32View[index] = vertexData[0];
-                float32View[index + 1] = vertexData[1];
-                float32View[index + 2] = vertexData[2];
-                float32View[index + 6] = vertexData[3];
-                float32View[index + 7] = vertexData[4];
-                float32View[index + 8] = vertexData[5];
-                float32View[index + 12] = vertexData[6];
-                float32View[index + 13] = vertexData[7];
-                float32View[index + 14] = vertexData[8];
-                float32View[index + 18] = vertexData[9];
-                float32View[index + 19] = vertexData[10];
-                float32View[index + 20] = vertexData[11];
-            }
-            uint32View[index + 3] = uvs[0];
-            uint32View[index + 9] = uvs[1];
-            uint32View[index + 15] = uvs[2];
-            uint32View[index + 21] = uvs[3];
-            uint32View[index + 4] = uint32View[index + 10] = uint32View[index + 16] = uint32View[index + 22] = argb;
-            float32View[index + 5] = float32View[index + 11] = float32View[index + 17] = float32View[index + 23] = textureId;
-        };
-        return SkyboxRenderer;
-    }(MultiTextureSpriteRenderer));
-    PIXI.WebGLRenderer.registerPlugin('skybox', SkyboxRenderer);
-})(pixi_projection || (pixi_projection = {}));
